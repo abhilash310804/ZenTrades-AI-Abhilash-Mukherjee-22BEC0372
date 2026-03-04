@@ -1,0 +1,213 @@
+{
+  "name": "Clara Answers Pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "/pipeline-a",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-demo",
+      "name": "Webhook: Demo Transcript",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 200],
+      "webhookId": "clara-pipeline-a"
+    },
+    {
+      "parameters": {
+        "path": "/pipeline-b",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-onboarding",
+      "name": "Webhook: Onboarding Input",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 500],
+      "webhookId": "clara-pipeline-b"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalize incoming transcript\nconst body = $input.first().json.body || $input.first().json;\nconst transcript = body.transcript || body.text || '';\nconst accountId = body.account_id || 'UNKNOWN';\nconst source = body.source || 'demo';\n\nreturn [{\n  json: {\n    account_id: accountId,\n    transcript: transcript,\n    source: source,\n    received_at: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "normalize-input",
+      "name": "Normalize Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalize onboarding input (transcript or form JSON)\nconst body = $input.first().json.body || $input.first().json;\nconst accountId = body.account_id || 'UNKNOWN';\nconst inputType = body.input_type || 'transcript';\nconst data = body.data || body.transcript || JSON.stringify(body.form || {});\n\nreturn [{\n  json: {\n    account_id: accountId,\n    onboarding_data: data,\n    input_type: inputType,\n    received_at: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "normalize-onboarding",
+      "name": "Normalize Onboarding Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "=",
+              "value": "={{ JSON.stringify({\n  model: 'claude-haiku-4-5-20251001',\n  max_tokens: 2000,\n  messages: [{\n    role: 'user',\n    content: `You are a configuration extraction system for Clara Answers.\\n\\nExtract structured account configuration from this demo call transcript. Output ONLY valid JSON matching the account memo schema. Do not hallucinate missing data — use null for unknowns.\\n\\nTRANSCRIPT:\\n${$json.transcript}`\n  }]\n}) }}"
+            }
+          ]
+        }
+      },
+      "id": "llm-extract-demo",
+      "name": "LLM: Extract from Demo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [680, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "=",
+              "value": "={{ JSON.stringify({\n  model: 'claude-haiku-4-5-20251001',\n  max_tokens: 2000,\n  messages: [{\n    role: 'user',\n    content: `You are a configuration update system for Clara Answers.\\n\\nExtract ONLY what changed or is new in this onboarding data compared to the v1 memo. Output a JSON patch object.\\n\\nV1 MEMO:\\n${JSON.stringify($('Load v1 Memo').first().json)}\\n\\nONBOARDING DATA:\\n${$json.onboarding_data}`\n  }]\n}) }}"
+            }
+          ]
+        }
+      },
+      "id": "llm-extract-onboarding",
+      "name": "LLM: Extract Onboarding Patch",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [680, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse LLM extraction response and build account memo v1\nconst response = $input.first().json;\nconst content = response.content[0].text;\n\nlet memo = {};\ntry {\n  const clean = content.replace(/```json\\s*/g, '').replace(/```/g, '').trim();\n  memo = JSON.parse(clean);\n} catch(e) {\n  memo = { parse_error: e.message, raw: content };\n}\n\nconst accountId = $('Normalize Input').first().json.account_id;\nmemo.account_id = accountId;\nmemo.version = 'v1';\nmemo.source = 'demo_call';\nmemo.generated_at = new Date().toISOString().split('T')[0];\n\nreturn [{ json: memo }];"
+      },
+      "id": "build-memo-v1",
+      "name": "Build Account Memo v1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [920, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate Retell Agent Spec from memo\nconst memo = $input.first().json;\nconst bh = memo.business_hours || {};\nconst pricing = memo.pricing || {};\nconst transfer = memo.call_transfer_rules || {};\n\nconst spec = {\n  agent_name: `Clara - ${memo.company_name || 'Unknown'}`,\n  version: 'v1',\n  source: 'demo_call',\n  account_id: memo.account_id,\n  generated_at: new Date().toISOString().split('T')[0],\n  voice_style: {\n    tone: 'professional, warm, efficient',\n    language: 'en-US',\n    persona: `Clara, assistant for ${memo.company_name}`\n  },\n  key_variables: {\n    company_name: memo.company_name,\n    owner_name: memo.contact_name,\n    business_hours: `${(bh.days||[]).join(', ')}, ${bh.start} to ${bh.end}`,\n    timezone: bh.timezone,\n    notification_email: memo.notification_email,\n    transfer_number: transfer.transfer_number || 'PENDING'\n  },\n  call_transfer_protocol: {\n    trigger: 'Caller requests owner or emergency dispatch',\n    transfer_number: transfer.transfer_number || 'PENDING',\n    announce_before_transfer: 'Please hold while I connect you.',\n    on_transfer_fail: transfer.transfer_fail_message || 'Unable to connect. Your details have been noted.'\n  },\n  system_prompt: '[GENERATED BY SEPARATE LLM CALL - see pipeline_a_extract.py]',\n  tool_invocation_placeholders: {\n    transfer_call: 'Trigger when caller should be connected to owner.',\n    send_notification: 'Send call summary to notification email and SMS after each call.'\n  }\n};\n\nreturn [{ json: { memo, spec } }];"
+      },
+      "id": "build-agent-spec-v1",
+      "name": "Build Agent Spec v1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1160, 200]
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "={{ 'outputs/accounts/' + $json.memo.account_id + '/v1/account_memo.json' }}",
+        "dataPropertyName": "={{ JSON.stringify($json.memo, null, 2) }}"
+      },
+      "id": "save-memo-v1",
+      "name": "Save Memo v1",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1,
+      "position": [1400, 160]
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "={{ 'outputs/accounts/' + $json.spec.account_id + '/v1/agent_spec.json' }}",
+        "dataPropertyName": "={{ JSON.stringify($json.spec, null, 2) }}"
+      },
+      "id": "save-spec-v1",
+      "name": "Save Agent Spec v1",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1,
+      "position": [1400, 240]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'success', account_id: $json.spec.account_id, version: 'v1', unknowns: $json.memo.questions_or_unknowns }) }}"
+      },
+      "id": "respond-a",
+      "name": "Respond Pipeline A",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1640, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ status: 'success', account_id: $json.account_id, version: 'v2' }"
+      },
+      "id": "respond-b",
+      "name": "Respond Pipeline B",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1640, 500]
+    }
+  ],
+  "connections": {
+    "Webhook: Demo Transcript": {
+      "main": [[{ "node": "Normalize Input", "type": "main", "index": 0 }]]
+    },
+    "Webhook: Onboarding Input": {
+      "main": [[{ "node": "Normalize Onboarding Input", "type": "main", "index": 0 }]]
+    },
+    "Normalize Input": {
+      "main": [[{ "node": "LLM: Extract from Demo", "type": "main", "index": 0 }]]
+    },
+    "Normalize Onboarding Input": {
+      "main": [[{ "node": "LLM: Extract Onboarding Patch", "type": "main", "index": 0 }]]
+    },
+    "LLM: Extract from Demo": {
+      "main": [[{ "node": "Build Account Memo v1", "type": "main", "index": 0 }]]
+    },
+    "LLM: Extract Onboarding Patch": {
+      "main": [[{ "node": "Build Agent Spec v1", "type": "main", "index": 0 }]]
+    },
+    "Build Account Memo v1": {
+      "main": [[{ "node": "Build Agent Spec v1", "type": "main", "index": 0 }]]
+    },
+    "Build Agent Spec v1": {
+      "main": [[{ "node": "Save Memo v1", "type": "main", "index": 0 }]]
+    },
+    "Save Memo v1": {
+      "main": [[{ "node": "Save Agent Spec v1", "type": "main", "index": 0 }]]
+    },
+    "Save Agent Spec v1": {
+      "main": [[{ "node": "Respond Pipeline A", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "instanceId": "clara-pipeline"
+  }
+}
