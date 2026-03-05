@@ -1,0 +1,20 @@
+{
+  "account_id": "BEN001",
+  "changelog_generated": "2026-03-05",
+  "v1_source": "demo_call (2026-03-04)",
+  "v2_source": "PENDING - onboarding call/form not yet received",
+  "total_changes": 0,
+  "changes": [],
+  "conflicts": [],
+  "questions_resolved": [],
+  "questions_remaining": [
+    "Timezone not explicitly confirmed — assumed Mountain Time (Calgary, AB)",
+    "Ben's second phone number not yet provided — required for live call transfer",
+    "Call transfer timeout not discussed",
+    "Exact website URL not confirmed",
+    "What happens if G&M/Shelley calls during business hours?",
+    "Are there other after-hours emergency clients besides G&M?",
+    "Should Clara collect a job address for service call bookings during office hours?"
+  ],
+  "notes": "v2 will be generated once onboarding call transcript or form is received."
+}
