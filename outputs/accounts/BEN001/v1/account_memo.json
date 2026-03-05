@@ -1,0 +1,101 @@
+{
+  "account_id": "BEN001",
+  "version": "v1",
+  "source": "demo_call",
+  "meeting_date": "2026-03-04",
+  "generated_at": "2026-03-05",
+
+  "company_name": "Ben's Electric Solutions",
+  "contact_name": "Ben",
+  "contact_email": "info@benselectricsolutionsteam.com",
+  "contact_phone": "primary_business_line",
+  "notification_email": "info@benselectricsolutionsteam.com",
+  "notification_sms": "primary_business_line",
+
+  "business_hours": {
+    "days": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+    "start": "08:00",
+    "end": "16:30",
+    "timezone": "unknown - assumed Mountain Time (Calgary, AB)",
+    "notes": "Ben mentioned '8 to 4:30' from website. Timezone not explicitly confirmed."
+  },
+
+  "office_address": null,
+
+  "services_supported": [
+    "Electrical service calls",
+    "Residential electrical",
+    "Commercial electrical",
+    "Quotes and estimates",
+    "Emergency electrical (limited - existing clients only)"
+  ],
+
+  "pricing": {
+    "service_call_fee": 115,
+    "hourly_rate": 98,
+    "billing_increment": "half-hour",
+    "half_hour_rate": 49,
+    "first_half_hour_total": 164,
+    "notes": "$115 call-out fee (gets to site) + $98/hr billed in 30-min increments. Clara should only mention pricing if caller asks."
+  },
+
+  "emergency_definition": [
+    "After-hours calls from G&M Pressure Washing (Shelley Manley) regarding gas station properties (Chevron, Esso)"
+  ],
+
+  "emergency_routing_rules": {
+    "who_can_trigger_emergency": [
+      {
+        "client_name": "G&M Pressure Washing",
+        "contact_name": "Shelley Manley",
+        "contact_phone": "403-870-8494",
+        "contact_email": "gm_pressurewash@yahoo.ca",
+        "properties_managed": ["Chevron gas stations", "Esso gas stations"],
+        "approx_property_count": 20,
+        "location": "Calgary area"
+      }
+    ],
+    "routing_logic": "If caller identifies as G&M Pressure Washing or Shelley Manley calling about a gas station emergency, collect details and attempt transfer to Ben.",
+    "transfer_to": "Ben's personal/second number (not yet confirmed - pending setup)",
+    "fallback_if_transfer_fails": "Apologize, assure Ben will call back ASAP"
+  },
+
+  "non_emergency_routing_rules": {
+    "during_hours": "Collect caller name, phone number, and purpose. Transfer to Ben if available. If not, collect details and confirm Ben will follow up.",
+    "after_hours": "Collect name, phone number, and brief description. Confirm follow-up next business day."
+  },
+
+  "call_transfer_rules": {
+    "transfer_number": "Ben's second number - NOT YET PROVIDED",
+    "current_interim_setup": "Android call forwarding: forward to Clara only if Ben does not answer or declines",
+    "timeout": "unknown - not discussed",
+    "retries": "unknown - not discussed",
+    "transfer_fail_message": "Apologize and assure the caller Ben will follow up shortly"
+  },
+
+  "call_forwarding_setup": {
+    "phase_1": "Android conditional forwarding (no answer / declined) → Clara",
+    "phase_2": "Once second number is active: all calls → Clara → transfer to second number on request"
+  },
+
+  "integration_constraints": [
+    "No CRM or ServiceTrade integration mentioned",
+    "Post-call notifications via email and SMS to Ben"
+  ],
+
+  "after_hours_flow_summary": "Greet caller. Ask purpose. If caller is from G&M Pressure Washing with a gas station emergency, collect name, number, address/property details and attempt transfer to Ben. For all other callers, collect name, number, and message, and confirm next-business-day follow-up.",
+
+  "office_hours_flow_summary": "Greet caller. Ask purpose. Collect name and callback number. Attempt transfer to Ben. If Ben unavailable, take message and confirm follow-up. If caller asks about pricing, mention $115 call-out fee and $98/hr rate.",
+
+  "questions_or_unknowns": [
+    "Timezone not explicitly confirmed - assumed Mountain Time (Calgary, AB) based on context",
+    "Ben's second phone number not yet provided - required for live call transfer",
+    "Call transfer timeout not discussed",
+    "Exact website URL not mentioned (used for training agent)",
+    "What happens if G&M/Shelley calls during business hours - same routing or different?",
+    "Are there any other after-hours emergency clients besides G&M?",
+    "Should Clara collect a job address for service call bookings during office hours?"
+  ],
+
+  "notes": "Ben is a solo operator. Existing trade contractors contact field staff directly. Clara is primarily for new clients, small jobs, and general service calls. Ben uses Android. Second number setup is pending - interim setup uses conditional call forwarding. G&M Pressure Washing (Shelley Manley) is the only after-hours emergency client."
+}
